@@ -51,6 +51,9 @@ struct ManzarState {
     cat: Point,
     speed: i32,
     frame: u32,
+    idle_frame: u32,
+    idle_timeout: u32,
+    idle_buffer: u32,
 }
 
 impl ManzarState {
@@ -72,7 +75,39 @@ impl ManzarState {
 
         if dist < speed {
             // It's close enough to the mouse.
-            self.set_sprite(&self.sprites.idle.clone());
+            if self.idle_frame == 0 {
+                self.set_sprite(&self.sprites.idle.clone());
+                self.idle_frame = 1;
+            } else {
+                self.idle_frame = self.idle_frame + 1;
+
+                if self.idle_frame >= self.idle_timeout {
+                    let diff = self.idle_frame - self.idle_timeout;
+                    if diff > 10 && diff < 32 {
+                        self.set_sprite(&self.sprites.scratch.cat.clone());
+                    } else if diff > self.idle_timeout {
+                        self.set_idle_sprite(&self.sprites.sleeping.clone());
+                    } else {
+                        self.set_sprite(&self.sprites.idle.clone());
+                    }
+                } else if (0..10).contains(&(self.idle_timeout - self.idle_frame)) {
+                    self.set_sprite(&self.sprites.tired.clone());
+                } else {
+                    self.set_sprite(&self.sprites.idle.clone());
+                }
+
+                if self.idle_buffer == 0 {
+                    self.idle_buffer = self.idle_timeout / 10; // change this to adjust alert time
+                }
+            }
+            return ();
+        }
+
+        self.idle_frame = 0;
+
+        if self.idle_buffer > 0 {
+            self.idle_buffer = self.idle_buffer - 1;
+            self.set_sprite(&self.sprites.alert.clone());
             return ();
         }
 
@@ -105,6 +140,20 @@ impl ManzarState {
         // let sprite = set[(self.frame % 2) as usize];
         self.set_sprite(&sprite);
         self.move_to(x.round() as i32, y.round() as i32);
+    }
+
+    fn set_idle_sprite(&mut self, sprite: &Sprite) {
+        let pt = match sprite {
+            Sprite::Animated(pts) => &pts[((self.frame / 4) % (pts.len() as u32)) as usize],
+            Sprite::Static(pt) => pt,
+        };
+        self.element
+            .style()
+            .set_property(
+                "background-position",
+                &format!("{}px {}px", pt.0 * 32, pt.1 * 32),
+            )
+            .unwrap();
     }
 
     fn set_sprite(&mut self, sprite: &Sprite) {
@@ -225,10 +274,13 @@ pub unsafe fn start_manzar() -> Result<(), JsValue> {
     let manzar_state = ManzarState {
         element: div,
         sprites,
-        mouse: Point(16, 16),
+        mouse: Point(32, 32),
         cat: Point(32, 32),
         speed: 10,
         frame: 0,
+        idle_frame: 0,
+        idle_timeout: 50,
+        idle_buffer: 0,
     };
 
     let manzar = Manzar {
