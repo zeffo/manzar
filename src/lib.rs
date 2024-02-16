@@ -1,15 +1,28 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use wasm_bindgen::prelude::*;
-use web_sys::{HtmlElement, MouseEvent};
+use web_sys::{console, HtmlElement, MouseEvent};
 
 // (x, y)
 #[derive(Clone)]
 struct Point(i32, i32);
 
 #[derive(Clone)]
+enum AnimationDuration {
+    Infinite,
+    Definite(u32),
+}
+
+#[derive(Clone)]
+struct Animation {
+    states: Vec<Point>,
+    duration: AnimationDuration,
+    speed: u32,
+}
+
+#[derive(Clone)]
 enum Sprite {
     Static(Point),
-    Animated(Vec<Point>),
+    Animated(Animation),
 }
 
 #[derive(Clone)]
@@ -44,6 +57,17 @@ struct ManzarSprites {
     scratch: ScratchSprites,
 }
 
+struct AnimationState {
+    sprite: Sprite,
+    frame: u32,
+}
+
+struct IdleState {
+    timeout: u32,
+    frame: u32,
+    buffer: u32,
+}
+
 struct ManzarState {
     element: HtmlElement,
     sprites: ManzarSprites,
@@ -51,9 +75,8 @@ struct ManzarState {
     cat: Point,
     speed: i32,
     frame: u32,
-    idle_frame: u32,
-    idle_timeout: u32,
-    idle_buffer: u32,
+    animation: AnimationState,
+    idle: IdleState,
 }
 
 impl ManzarState {
@@ -74,39 +97,38 @@ impl ManzarState {
         let speed = self.speed as f32;
 
         if dist < speed {
-            // It's close enough to the mouse.
-            if self.idle_frame == 0 {
+            if self.idle.frame == 0 {
+                // It's close enough to the mouse.
                 self.set_sprite(&self.sprites.idle.clone());
-                self.idle_frame = 1;
+                self.idle.frame = 1;
             } else {
-                self.idle_frame = self.idle_frame + 1;
+                self.idle.frame = self.idle.frame + 1;
+                if self.idle.frame >= self.idle.timeout {
+                    let diff = self.idle.frame - self.idle.timeout;
 
-                if self.idle_frame >= self.idle_timeout {
-                    let diff = self.idle_frame - self.idle_timeout;
-                    if diff > 10 && diff < 32 {
+                    // change below to adjust scratch frequency
+                    let scratch_flag = self.frame % 111 == 0;
+
+                    if diff > 40 {
+                        self.set_sprite(&self.sprites.sleeping.clone());
+                    } else if scratch_flag {
                         self.set_sprite(&self.sprites.scratch.cat.clone());
-                    } else if diff > self.idle_timeout {
-                        self.set_idle_sprite(&self.sprites.sleeping.clone());
+                    } else if (20..40).contains(&diff) {
+                        self.set_sprite(&self.sprites.tired.clone());
                     } else {
-                        self.set_sprite(&self.sprites.idle.clone());
+                        self.set_sprite(&self.animation.sprite.clone());
                     }
-                } else if (0..10).contains(&(self.idle_timeout - self.idle_frame)) {
-                    self.set_sprite(&self.sprites.tired.clone());
-                } else {
-                    self.set_sprite(&self.sprites.idle.clone());
                 }
-
-                if self.idle_buffer == 0 {
-                    self.idle_buffer = self.idle_timeout / 10; // change this to adjust alert time
-                }
+            }
+            if self.idle.buffer == 0 {
+                self.idle.buffer = 5;
             }
             return ();
         }
 
-        self.idle_frame = 0;
-
-        if self.idle_buffer > 0 {
-            self.idle_buffer = self.idle_buffer - 1;
+        self.idle.frame = 0;
+        if self.idle.buffer > 0 {
+            self.idle.buffer = self.idle.buffer - 1;
             self.set_sprite(&self.sprites.alert.clone());
             return ();
         }
@@ -142,27 +164,44 @@ impl ManzarState {
         self.move_to(x.round() as i32, y.round() as i32);
     }
 
-    fn set_idle_sprite(&mut self, sprite: &Sprite) {
-        let pt = match sprite {
-            Sprite::Animated(pts) => &pts[((self.frame / 4) % (pts.len() as u32)) as usize],
-            Sprite::Static(pt) => pt,
+    fn set_sprite(&mut self, sprite: &Sprite) {
+        let cur = &self.animation.sprite.clone();
+        let target = match cur {
+            Sprite::Animated(anim) => match &anim.duration {
+                AnimationDuration::Definite(_) => cur, // if we are currently playing a definite
+                // animation, lets finish it before changing sprites
+                AnimationDuration::Infinite => sprite,
+            },
+            Sprite::Static(_) => sprite,
         };
-        self.element
-            .style()
-            .set_property(
-                "background-position",
-                &format!("{}px {}px", pt.0 * 32, pt.1 * 32),
-            )
-            .unwrap();
+        self._set_sprite(target);
     }
 
-    fn set_sprite(&mut self, sprite: &Sprite) {
+    fn _set_sprite(&mut self, sprite: &Sprite) {
         // log(format!("Setting Sprite to {:#?}", sprite));
 
         let pt = match sprite {
-            Sprite::Animated(pts) => &pts[(self.frame % (pts.len() as u32)) as usize],
-            Sprite::Static(pt) => pt,
+            Sprite::Animated(anim) => {
+                match anim.duration {
+                    AnimationDuration::Definite(duration) => {
+                        if duration <= self.animation.frame {
+                            self._set_sprite(&self.sprites.idle.clone());
+                            self.animation.frame = 0;
+                            return ();
+                        }
+                    }
+                    AnimationDuration::Infinite => (),
+                }
+                let len = anim.states.len() as u32;
+                self.animation.frame = self.animation.frame + 1;
+                &anim.states[(((self.animation.frame / (100 / anim.speed)) as u32) % len) as usize]
+            }
+            Sprite::Static(pt) => {
+                self.animation.frame = 0;
+                pt
+            }
         };
+        self.animation.sprite = sprite.clone();
         self.element
             .style()
             .set_property(
@@ -238,26 +277,78 @@ pub unsafe fn start_manzar() -> Result<(), JsValue> {
     body.append_child(&div)?;
 
     let cardinal = CardinalSprites {
-        n: Sprite::Animated(vec![Point(-1, -2), Point(-1, -3)]),
-        e: Sprite::Animated(vec![Point(-3, 0), Point(-3, -1)]),
-        s: Sprite::Animated(vec![Point(-6, -3), Point(-7, -2)]),
-        w: Sprite::Animated(vec![Point(-4, -2), Point(-4, -3)]),
+        n: Sprite::Animated(Animation {
+            states: vec![Point(-1, -2), Point(-1, -3)],
+            duration: AnimationDuration::Infinite,
+            speed: 100,
+        }),
+        e: Sprite::Animated(Animation {
+            states: vec![Point(-3, 0), Point(-3, -1)],
+            duration: AnimationDuration::Infinite,
+            speed: 100,
+        }),
+        s: Sprite::Animated(Animation {
+            states: vec![Point(-6, -3), Point(-7, -2)],
+            duration: AnimationDuration::Infinite,
+            speed: 100,
+        }),
+        w: Sprite::Animated(Animation {
+            states: vec![Point(-4, -2), Point(-4, -3)],
+            duration: AnimationDuration::Infinite,
+            speed: 100,
+        }),
     };
 
     let ordinal = OrdinalSprites {
-        ne: Sprite::Animated(vec![Point(0, -2), Point(0, -3)]),
-        se: Sprite::Animated(vec![Point(-5, -1), Point(-5, -2)]),
-        sw: Sprite::Animated(vec![Point(-5, -3), Point(-6, -1)]),
-        nw: Sprite::Animated(vec![Point(-1, 0), Point(-1, -1)]),
+        ne: Sprite::Animated(Animation {
+            states: vec![Point(0, -2), Point(0, -3)],
+            duration: AnimationDuration::Infinite,
+            speed: 100,
+        }),
+        se: Sprite::Animated(Animation {
+            states: vec![Point(-5, -1), Point(-5, -2)],
+            duration: AnimationDuration::Infinite,
+            speed: 100,
+        }),
+        sw: Sprite::Animated(Animation {
+            states: vec![Point(-5, -3), Point(-6, -1)],
+            duration: AnimationDuration::Infinite,
+            speed: 100,
+        }),
+        nw: Sprite::Animated(Animation {
+            states: vec![Point(-1, 0), Point(-1, -1)],
+            duration: AnimationDuration::Infinite,
+            speed: 100,
+        }),
     };
 
     let scratch = ScratchSprites {
-        cat: Sprite::Animated(vec![Point(-5, 0), Point(-6, 0), Point(-7, 0)]),
+        cat: Sprite::Animated(Animation {
+            states: vec![Point(-5, 0), Point(-6, 0), Point(-7, 0)],
+            duration: AnimationDuration::Definite(20),
+            speed: 100,
+        }),
         cardinal: CardinalSprites {
-            n: Sprite::Animated(vec![Point(0, 0), Point(0, -1)]),
-            e: Sprite::Animated(vec![Point(-2, -2), Point(-2, -3)]),
-            w: Sprite::Animated(vec![Point(-4, 0), Point(-4, -1)]),
-            s: Sprite::Animated(vec![Point(-7, -1), Point(-6, -2)]),
+            n: Sprite::Animated(Animation {
+                states: vec![Point(0, 0), Point(0, -1)],
+                duration: AnimationDuration::Definite(20),
+                speed: 100,
+            }),
+            e: Sprite::Animated(Animation {
+                states: vec![Point(-2, -2), Point(-2, -3)],
+                duration: AnimationDuration::Definite(20),
+                speed: 100,
+            }),
+            w: Sprite::Animated(Animation {
+                states: vec![Point(-4, 0), Point(-4, -1)],
+                duration: AnimationDuration::Definite(20),
+                speed: 100,
+            }),
+            s: Sprite::Animated(Animation {
+                states: vec![Point(-7, -1), Point(-6, -2)],
+                duration: AnimationDuration::Definite(20),
+                speed: 100,
+            }),
         },
     };
 
@@ -265,11 +356,17 @@ pub unsafe fn start_manzar() -> Result<(), JsValue> {
         idle: Sprite::Static(Point(-3, -3)),
         alert: Sprite::Static(Point(-7, -3)),
         tired: Sprite::Static(Point(-3, -2)),
-        sleeping: Sprite::Animated(vec![Point(-2, 0), Point(-2, -1)]),
+        sleeping: Sprite::Animated(Animation {
+            states: vec![Point(-2, 0), Point(-2, -1)],
+            duration: AnimationDuration::Infinite,
+            speed: 25,
+        }),
         cardinal,
         ordinal,
         scratch,
     };
+
+    let idle = sprites.idle.clone();
 
     let manzar_state = ManzarState {
         element: div,
@@ -278,9 +375,15 @@ pub unsafe fn start_manzar() -> Result<(), JsValue> {
         cat: Point(32, 32),
         speed: 10,
         frame: 0,
-        idle_frame: 0,
-        idle_timeout: 50,
-        idle_buffer: 0,
+        animation: AnimationState {
+            sprite: idle,
+            frame: 0,
+        },
+        idle: IdleState {
+            timeout: 50,
+            frame: 0,
+            buffer: 0,
+        },
     };
 
     let manzar = Manzar {

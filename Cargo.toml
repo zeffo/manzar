@@ -18,6 +18,7 @@ features = [
   'Window',
   'CssStyleDeclaration',
   'MouseEvent',
+  "console"
 ]
 
 [lib]
