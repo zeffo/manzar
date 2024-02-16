@@ -107,7 +107,7 @@ impl ManzarState {
                     let diff = self.idle.frame - self.idle.timeout;
 
                     // change below to adjust scratch frequency
-                    let scratch_flag = self.frame % 111 == 0;
+                    let scratch_flag = self.frame % 117 == 0;
 
                     if diff > 40 {
                         self.set_sprite(&self.sprites.sleeping.clone());
@@ -187,6 +187,8 @@ impl ManzarState {
                         if duration <= self.animation.frame {
                             self._set_sprite(&self.sprites.idle.clone());
                             self.animation.frame = 0;
+                            self.idle.frame = 0;
+                            self.frame = 0;
                             return ();
                         }
                     }
