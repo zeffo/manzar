@@ -1,6 +1,6 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
-use web_sys::{console, HtmlElement, MouseEvent};
+use web_sys::{HtmlElement, MouseEvent};
 
 // (x, y)
 #[derive(Clone)]
@@ -17,6 +17,15 @@ struct Animation {
     states: Vec<Point>,
     duration: AnimationDuration,
     speed: u32,
+}
+
+impl Animation {
+    fn is_infinite(&self) -> bool {
+        match self.duration {
+            AnimationDuration::Infinite => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -42,9 +51,10 @@ struct OrdinalSprites {
 }
 
 // When the cat is scratching a page wall
+#[allow(dead_code)]
 struct ScratchSprites {
     cat: Sprite,
-    cardinal: CardinalSprites,
+    cardinal: CardinalSprites, // TODO: add these idle animations
 }
 
 struct ManzarSprites {
@@ -96,9 +106,8 @@ impl ManzarState {
 
         let speed = self.speed as f32;
 
-
         // Idle Logic (cat close to mouse)
-        if dist < speed { 
+        if dist < speed {
             if self.idle.frame == 0 {
                 self.set_sprite(&self.sprites.idle.clone());
                 self.idle.frame = 1;
@@ -108,7 +117,8 @@ impl ManzarState {
                     let diff = self.idle.frame - self.idle.timeout;
 
                     // change below to adjust scratch frequency
-                    let scratch_flag = self.frame % 117 == 0;
+                    // make sure it's > 100
+                    let scratch_flag = self.frame % 101 == 0;
 
                     if diff > 40 {
                         self.set_sprite(&self.sprites.sleeping.clone());
@@ -160,12 +170,19 @@ impl ManzarState {
             direction.push('E')
         }
 
-        let sprite = self.get_compass_sprites(direction);
+        let sprite = self.get_compass_sprites(&direction);
         // let sprite = set[(self.frame % 2) as usize];
         self.set_sprite(&sprite);
+        match &self.animation.sprite {
+            Sprite::Static(_) => (),
+            Sprite::Animated(anim) => {
+                if !anim.is_infinite() {
+                    return (); // Don't move if a definite animation is playing
+                }
+            }
+        }
         self.move_to(x.round() as i32, y.round() as i32);
     }
-
 
     /// Change the sprite while respecting currently playing animations
     fn set_sprite(&mut self, sprite: &Sprite) {
@@ -229,22 +246,21 @@ impl ManzarState {
         self.cat = Point(x, y);
     }
 
-    fn get_compass_sprites(&self, direction: String) -> Sprite {
+    fn get_compass_sprites(&self, direction: &str) -> Sprite {
         let c = self.sprites.cardinal.clone();
         let o = self.sprites.ordinal.clone();
 
-        let map = HashMap::from([
-            ("N", c.n),
-            ("E", c.e),
-            ("W", c.w),
-            ("S", c.s),
-            ("NE", o.ne),
-            ("NW", o.nw),
-            ("SE", o.se),
-            ("SW", o.sw),
-        ]);
-
-        map.get(direction.as_str()).unwrap().clone()
+        match direction {
+            "N" => c.n,
+            "E" => c.e,
+            "W" => c.w,
+            "S" => c.s,
+            "NE" => o.ne,
+            "NW" => o.nw,
+            "SE" => o.se,
+            "SW" => o.sw,
+            _ => panic!("Invalid direction!"),
+        }
     }
 }
 
