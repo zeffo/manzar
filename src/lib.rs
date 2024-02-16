@@ -96,9 +96,10 @@ impl ManzarState {
 
         let speed = self.speed as f32;
 
-        if dist < speed {
+
+        // Idle Logic (cat close to mouse)
+        if dist < speed { 
             if self.idle.frame == 0 {
-                // It's close enough to the mouse.
                 self.set_sprite(&self.sprites.idle.clone());
                 self.idle.frame = 1;
             } else {
@@ -121,6 +122,7 @@ impl ManzarState {
                 }
             }
             if self.idle.buffer == 0 {
+                // change below to adjust alert time
                 self.idle.buffer = 5;
             }
             return ();
@@ -164,6 +166,8 @@ impl ManzarState {
         self.move_to(x.round() as i32, y.round() as i32);
     }
 
+
+    /// Change the sprite while respecting currently playing animations
     fn set_sprite(&mut self, sprite: &Sprite) {
         let cur = &self.animation.sprite.clone();
         let target = match cur {
@@ -178,8 +182,6 @@ impl ManzarState {
     }
 
     fn _set_sprite(&mut self, sprite: &Sprite) {
-        // log(format!("Setting Sprite to {:#?}", sprite));
-
         let pt = match sprite {
             Sprite::Animated(anim) => {
                 match anim.duration {
