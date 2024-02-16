@@ -1,5 +1,6 @@
 # manzar
 manzar is a cat that follows your cursor.
+You can view a live demo on [my website](https://zeffo.me).
 
 ## Usage
 1. Clone this repo.
