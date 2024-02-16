@@ -1,5 +1,7 @@
 # manzar
-manzar is a cat that follows your cursor.
+manzar is a cat that follows your cursor. <br>
+*manzar is the marathi word for cat*
+
 You can view a live demo on [my website](https://zeffo.me).
 
 ## Usage
