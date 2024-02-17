@@ -90,7 +90,6 @@ struct ManzarState {
 }
 
 impl ManzarState {
-    /// on_mouse_down callback
     fn on_mouse_down(&mut self, event: MouseEvent) {
         let x = event.client_x();
         let y = event.client_y();
@@ -314,7 +313,7 @@ pub unsafe fn start_manzar() -> Result<(), JsValue> {
     ];
 
     for (prop, val) in STYLES.iter() {
-        div.style().set_property(prop, val)?; // Set all styles defined in `STYLES`
+        div.style().set_property(prop, val)?; 
     }
     body.append_child(&div)?;
 
