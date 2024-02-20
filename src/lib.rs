@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlElement, MouseEvent};
 
@@ -51,10 +51,9 @@ struct OrdinalSprites {
 }
 
 // When the cat is scratching a page wall
-#[allow(dead_code)]
 struct ScratchSprites {
     cat: Sprite,
-    cardinal: CardinalSprites, // TODO: add these idle animations
+    cardinal: CardinalSprites,
 }
 
 struct ManzarSprites {
@@ -87,6 +86,7 @@ struct ManzarState {
     frame: u32,
     animation: AnimationState,
     idle: IdleState,
+    window_size: (i32, i32),
 }
 
 impl ManzarState {
@@ -95,6 +95,28 @@ impl ManzarState {
         let x = event.client_x();
         let y = event.client_y();
         self.mouse = Point(x, y);
+    }
+
+    fn get_cardinal_scratch_sprite(&self) -> Sprite {
+        let cx = self.cat.0;
+        let cy = self.cat.1;
+        let x = self.window_size.0;
+        let y = self.window_size.1;
+        let margin = 10;
+
+        let mut map = HashMap::new();
+        let scratch = &self.sprites.scratch;
+        map.insert(cx, scratch.cardinal.w.clone());
+        map.insert(cy, scratch.cardinal.n.clone());
+        map.insert(x - cx, scratch.cardinal.e.clone());
+        map.insert(y - cy, scratch.cardinal.s.clone());
+        let mut items: Vec<&i32> = map.keys().filter(|d| **d < margin).collect();
+        if items.is_empty() {
+            scratch.cat.clone()
+        } else {
+            items.sort();
+            map.get(items[0]).unwrap().clone()
+        }
     }
 
     fn render(&mut self) {
@@ -123,7 +145,7 @@ impl ManzarState {
                     if diff > 40 {
                         self.set_sprite(&self.sprites.sleeping.clone());
                     } else if scratch_flag {
-                        self.set_sprite(&self.sprites.scratch.cat.clone());
+                        self.set_sprite(&self.get_cardinal_scratch_sprite());
                     } else if (20..40).contains(&diff) {
                         self.set_sprite(&self.sprites.tired.clone());
                     } else {
@@ -388,6 +410,8 @@ pub unsafe fn start_manzar() -> Result<(), JsValue> {
 
     let idle = sprites.idle.clone();
 
+    let de = document.document_element().unwrap();
+
     let manzar_state = ManzarState {
         element: div,
         sprites,
@@ -404,6 +428,7 @@ pub unsafe fn start_manzar() -> Result<(), JsValue> {
             frame: 0,
             buffer: 0,
         },
+        window_size: (de.scroll_width(), de.scroll_height()),
     };
 
     let manzar = Manzar {
