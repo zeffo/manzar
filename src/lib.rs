@@ -97,7 +97,7 @@ impl ManzarState {
         self.mouse = Point(x, y);
     }
 
-    fn get_cardinal_scratch_sprite(&self) -> Sprite {
+    fn get_cardinal_scratch_sprite(&self) -> &Sprite {
         let cx = self.cat.0;
         let cy = self.cat.1;
         let x = self.window_size.0;
@@ -106,16 +106,16 @@ impl ManzarState {
 
         let mut map = HashMap::new();
         let scratch = &self.sprites.scratch;
-        map.insert(cx, scratch.cardinal.w.clone());
-        map.insert(cy, scratch.cardinal.n.clone());
-        map.insert(x - cx, scratch.cardinal.e.clone());
-        map.insert(y - cy, scratch.cardinal.s.clone());
+        map.insert(cx, &scratch.cardinal.w);
+        map.insert(cy, &scratch.cardinal.n);
+        map.insert(x - cx, &scratch.cardinal.e);
+        map.insert(y - cy, &scratch.cardinal.s);
         let mut items: Vec<&i32> = map.keys().filter(|d| **d < margin).collect();
         if items.is_empty() {
-            scratch.cat.clone()
+            &scratch.cat
         } else {
             items.sort();
-            map.get(items[0]).unwrap().clone()
+            map.get(items[0]).unwrap()
         }
     }
 
@@ -145,7 +145,7 @@ impl ManzarState {
                     if diff > 40 {
                         self.set_sprite(&self.sprites.sleeping.clone());
                     } else if scratch_flag {
-                        self.set_sprite(&self.get_cardinal_scratch_sprite());
+                        self.set_sprite(&self.get_cardinal_scratch_sprite().clone());
                     } else if (20..40).contains(&diff) {
                         self.set_sprite(&self.sprites.tired.clone());
                     } else {
