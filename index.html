@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en-US">
   <head>
     <meta charset="utf-8" />
@@ -6,11 +6,11 @@
   </head>
   <body>
     <script type="module">
-      import init from './pkg/manzar.js';
+      import init, { start } from "./pkg/manzar.js";
       async function run() {
         await init();
+        await start("./kitty.gif");
       }
-
       run();
     </script>
   </body>

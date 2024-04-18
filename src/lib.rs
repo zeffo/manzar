@@ -290,8 +290,8 @@ struct Manzar {
     state: Rc<RefCell<ManzarState>>,
 }
 
-#[wasm_bindgen(start)]
-pub unsafe fn start_manzar() -> Result<(), JsValue> {
+#[wasm_bindgen]
+pub unsafe fn start(sprites_path: String) -> Result<(), JsValue> {
     let window = web_sys::window().expect("no window exists.");
     let document = window.document().expect("no document exists.");
     let body = document.body().expect("document does not have a body.");
@@ -302,18 +302,21 @@ pub unsafe fn start_manzar() -> Result<(), JsValue> {
 
     div.set_id("Manzar");
 
-    const STYLES: [(&str, &str); 7] = [
+    let styles: [(&str, &str); 7] = [
         ("height", "32px"),
         ("width", "32px"),
         ("top", "16px"),
         ("left", "16px"),
-        ("background-image", "url('kitty.gif')"),
+        (
+            "background-image",
+            &format!("url('{}')", sprites_path.as_str()),
+        ),
         ("position", "fixed"),
         ("imageRendering", "pixelated"),
     ];
 
-    for (prop, val) in STYLES.iter() {
-        div.style().set_property(prop, val)?; 
+    for (prop, val) in styles.iter() {
+        div.style().set_property(prop, val)?;
     }
     body.append_child(&div)?;
 
