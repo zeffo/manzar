@@ -21,10 +21,7 @@ struct Animation {
 
 impl Animation {
     fn is_infinite(&self) -> bool {
-        match self.duration {
-            AnimationDuration::Infinite => true,
-            _ => false,
-        }
+        matches!(self.duration, AnimationDuration::Infinite)
     }
 }
 
@@ -90,7 +87,7 @@ struct ManzarState {
 }
 
 impl ManzarState {
-    fn on_mouse_down(&mut self, event: MouseEvent) {
+    fn on_mouse_down(&mut self, event: &MouseEvent) {
         let x = event.client_x();
         let y = event.client_y();
         self.mouse = Point(x, y);
@@ -119,7 +116,7 @@ impl ManzarState {
     }
 
     fn render(&mut self) {
-        self.frame = self.frame + 1;
+        self.frame += 1;
 
         let diff_x = self.cat.0 - self.mouse.0;
         let diff_y = self.cat.1 - self.mouse.1;
@@ -133,7 +130,7 @@ impl ManzarState {
                 self.set_sprite(&self.sprites.idle.clone());
                 self.idle.frame = 1;
             } else {
-                self.idle.frame = self.idle.frame + 1;
+                self.idle.frame += 1;
                 if self.idle.frame >= self.idle.timeout {
                     let diff = self.idle.frame - self.idle.timeout;
 
@@ -156,14 +153,14 @@ impl ManzarState {
                 // change below to adjust alert time
                 self.idle.buffer = 5;
             }
-            return ();
+            return;
         }
 
         self.idle.frame = 0;
         if self.idle.buffer > 0 {
-            self.idle.buffer = self.idle.buffer - 1;
+            self.idle.buffer -= 1;
             self.set_sprite(&self.sprites.alert.clone());
-            return ();
+            return;
         }
 
         let cur_x = self.cat.0 as f32;
@@ -180,15 +177,15 @@ impl ManzarState {
         let mut direction = String::new();
 
         if dy > 0.5 {
-            direction.push('N')
+            direction.push('N');
         } else if dy < -0.5 {
-            direction.push('S')
+            direction.push('S');
         }
 
         if dx > 0.5 {
-            direction.push('W')
+            direction.push('W');
         } else if dx < -0.5 {
-            direction.push('E')
+            direction.push('E');
         }
 
         let sprite = self.get_compass_sprites(&direction);
@@ -198,7 +195,7 @@ impl ManzarState {
             Sprite::Static(_) => (),
             Sprite::Animated(anim) => {
                 if !anim.is_infinite() {
-                    return (); // Don't move if a definite animation is playing
+                    return; // Don't move if a definite animation is playing
                 }
             }
         }
@@ -229,14 +226,14 @@ impl ManzarState {
                             self.animation.frame = 0;
                             self.idle.frame = 0;
                             self.frame = 0;
-                            return ();
+                            return;
                         }
                     }
                     AnimationDuration::Infinite => (),
                 }
                 let len = anim.states.len() as u32;
-                self.animation.frame = self.animation.frame + 1;
-                &anim.states[(((self.animation.frame / (100 / anim.speed)) as u32) % len) as usize]
+                self.animation.frame += 1;
+                &anim.states[((self.animation.frame / (100 / anim.speed)) % len) as usize]
             }
             Sprite::Static(pt) => {
                 self.animation.frame = 0;
@@ -290,6 +287,8 @@ struct Manzar {
     state: Rc<RefCell<ManzarState>>,
 }
 
+/// # Safety
+/// Careful! This could leak memory...
 #[wasm_bindgen]
 pub unsafe fn start(sprites_path: String) -> Result<(), JsValue> {
     let window = web_sys::window().expect("no window exists.");
@@ -315,7 +314,7 @@ pub unsafe fn start(sprites_path: String) -> Result<(), JsValue> {
         ("imageRendering", "pixelated"),
     ];
 
-    for (prop, val) in styles.iter() {
+    for (prop, val) in &styles {
         div.style().set_property(prop, val)?;
     }
     body.append_child(&div)?;
@@ -442,7 +441,7 @@ pub unsafe fn start(sprites_path: String) -> Result<(), JsValue> {
     let mouse_clone = manzar.clone();
 
     let mouse_callback = Closure::<dyn FnMut(_)>::new(move |e: MouseEvent| {
-        mouse_clone.state.borrow_mut().on_mouse_down(e);
+        mouse_clone.state.borrow_mut().on_mouse_down(&e);
     });
 
     let frame_clone = manzar.clone();
