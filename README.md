@@ -12,13 +12,8 @@ You can view a live demo on [my website](https://zeffo.me).
 
 ## Performance
 
-I have no idea how to benchmark this.
-
-## Code Quality
-
-This is my first rust project.
-Apologies if your eyes start bleeding.
-(Feedback is very welcome!)
+Likely the same or worse than the javascript version, since WASM cannot efficiently manipulate the DOM.
+And the WASM filesize is also larger! So it's only good for bragging rights :3
 
 ## Credits
 
