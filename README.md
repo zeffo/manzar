@@ -3,6 +3,7 @@
 cat that wants to catch your mouse. <br>
 
 You can view a live demo on [my website](https://zeffo.me).
+Sprites by [aeshani](https://aeshanisingh.com/).
 
 ## Usage
 
