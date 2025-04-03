@@ -311,7 +311,7 @@ pub unsafe fn start(sprites_path: String) -> Result<(), JsValue> {
             &format!("url('{}')", sprites_path.as_str()),
         ),
         ("position", "fixed"),
-        ("imageRendering", "pixelated"),
+        ("image-rendering", "pixelated"),
     ];
 
     for (prop, val) in &styles {
