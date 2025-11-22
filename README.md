@@ -1,4 +1,4 @@
-# manzar
+# manzar <img width="32" height="32" alt="_28" src="https://github.com/user-attachments/assets/92043ef7-1263-4b8c-a337-76056e410803" />
 
 cat that wants to catch your mouse. <br>
 
