@@ -1,5 +1,4 @@
 # manzar <img width="32" height="32" alt="_28" src="https://github.com/user-attachments/assets/92043ef7-1263-4b8c-a337-76056e410803" />
-
 cat that wants to catch your mouse. <br>
 
 You can view a live demo on [my website](https://zeffo.me).
@@ -19,4 +18,6 @@ And the WASM filesize is also larger! So it's only good for bragging rights :3
 ## Credits
 
 Inspired by [adryd325/oneko.js](https://github.com/adryd325/oneko.js)
+
+![sleep](https://github.com/user-attachments/assets/bbcab164-8d6e-40ff-ad3c-5a7491d1e986)
 
