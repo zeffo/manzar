@@ -18,13 +18,18 @@ features = [
   'Window',
   'CssStyleDeclaration',
   'MouseEvent',
-  "console"
 ]
 
 [lib]
 crate-type = ["cdylib"]
 
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ['-Oz', '--all-features' ]
+
 
 [profile.release]
 lto = true
 opt-level = 'z'
+codegen-units = 1
+panic = 'abort'
+strip = true

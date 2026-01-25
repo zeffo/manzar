@@ -1,20 +1,45 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlElement, MouseEvent};
 
 // (x, y)
-#[derive(Clone)]
 struct Point(i32, i32);
 
-#[derive(Clone)]
+enum Direction {
+    N,
+    S,
+    E,
+    W,
+    NE,
+    NW,
+    SE,
+    SW,
+    None,
+}
+
+impl Direction {
+    fn from_deltas(dx: f32, dy: f32) -> Self {
+        match (dy > 0.5, dy < -0.5, dx > 0.5, dx < -0.5) {
+            (true, _, _, true) => Direction::NE,
+            (true, _, true, _) => Direction::NW,
+            (_, true, _, true) => Direction::SE,
+            (_, true, true, _) => Direction::SW,
+            (true, _, _, _) => Direction::N,
+            (_, true, _, _) => Direction::S,
+            (_, _, true, _) => Direction::W,
+            (_, _, _, true) => Direction::E,
+            _ => Direction::None,
+        }
+    }
+}
+
 enum AnimationDuration {
     Infinite,
     Definite(u32),
 }
 
-#[derive(Clone)]
 struct Animation {
-    states: Vec<Point>,
+    states: &'static [Point],
     duration: AnimationDuration,
     speed: u32,
 }
@@ -25,13 +50,11 @@ impl Animation {
     }
 }
 
-#[derive(Clone)]
 enum Sprite {
     Static(Point),
     Animated(Animation),
 }
 
-#[derive(Clone)]
 struct CardinalSprites {
     n: Sprite,
     e: Sprite,
@@ -39,7 +62,6 @@ struct CardinalSprites {
     w: Sprite,
 }
 
-#[derive(Clone)]
 struct OrdinalSprites {
     ne: Sprite,
     se: Sprite,
@@ -64,7 +86,7 @@ struct ManzarSprites {
 }
 
 struct AnimationState {
-    sprite: Sprite,
+    sprite: &'static Sprite,
     frame: u32,
 }
 
@@ -74,9 +96,92 @@ struct IdleState {
     buffer: u32,
 }
 
+static SPRITES: ManzarSprites = ManzarSprites {
+    idle: Sprite::Static(Point(-3, -3)),
+    alert: Sprite::Static(Point(-7, -3)),
+    tired: Sprite::Static(Point(-3, -2)),
+    sleeping: Sprite::Animated(Animation {
+        states: &[Point(-2, 0), Point(-2, -1)],
+        duration: AnimationDuration::Infinite,
+        speed: 25,
+    }),
+    cardinal: CardinalSprites {
+        n: Sprite::Animated(Animation {
+            states: &[Point(-1, -2), Point(-1, -3)],
+            duration: AnimationDuration::Infinite,
+            speed: 100,
+        }),
+        e: Sprite::Animated(Animation {
+            states: &[Point(-3, 0), Point(-3, -1)],
+            duration: AnimationDuration::Infinite,
+            speed: 100,
+        }),
+        s: Sprite::Animated(Animation {
+            states: &[Point(-6, -3), Point(-7, -2)],
+            duration: AnimationDuration::Infinite,
+            speed: 100,
+        }),
+        w: Sprite::Animated(Animation {
+            states: &[Point(-4, -2), Point(-4, -3)],
+            duration: AnimationDuration::Infinite,
+            speed: 100,
+        }),
+    },
+    ordinal: OrdinalSprites {
+        ne: Sprite::Animated(Animation {
+            states: &[Point(0, -2), Point(0, -3)],
+            duration: AnimationDuration::Infinite,
+            speed: 100,
+        }),
+        se: Sprite::Animated(Animation {
+            states: &[Point(-5, -1), Point(-5, -2)],
+            duration: AnimationDuration::Infinite,
+            speed: 100,
+        }),
+        sw: Sprite::Animated(Animation {
+            states: &[Point(-5, -3), Point(-6, -1)],
+            duration: AnimationDuration::Infinite,
+            speed: 100,
+        }),
+        nw: Sprite::Animated(Animation {
+            states: &[Point(-1, 0), Point(-1, -1)],
+            duration: AnimationDuration::Infinite,
+            speed: 100,
+        }),
+    },
+    scratch: ScratchSprites {
+        cat: Sprite::Animated(Animation {
+            states: &[Point(-5, 0), Point(-6, 0), Point(-7, 0)],
+            duration: AnimationDuration::Definite(20),
+            speed: 100,
+        }),
+        cardinal: CardinalSprites {
+            n: Sprite::Animated(Animation {
+                states: &[Point(0, 0), Point(0, -1)],
+                duration: AnimationDuration::Definite(20),
+                speed: 100,
+            }),
+            e: Sprite::Animated(Animation {
+                states: &[Point(-2, -2), Point(-2, -3)],
+                duration: AnimationDuration::Definite(20),
+                speed: 100,
+            }),
+            w: Sprite::Animated(Animation {
+                states: &[Point(-4, 0), Point(-4, -1)],
+                duration: AnimationDuration::Definite(20),
+                speed: 100,
+            }),
+            s: Sprite::Animated(Animation {
+                states: &[Point(-7, -1), Point(-6, -2)],
+                duration: AnimationDuration::Definite(20),
+                speed: 100,
+            }),
+        },
+    },
+};
+
 struct ManzarState {
     element: HtmlElement,
-    sprites: ManzarSprites,
     mouse: Point,
     cat: Point,
     speed: i32,
@@ -93,26 +198,27 @@ impl ManzarState {
         self.mouse = Point(x, y);
     }
 
-    fn get_cardinal_scratch_sprite(&self) -> &Sprite {
+    fn get_cardinal_scratch_sprite(&self) -> &'static Sprite {
         let cx = self.cat.0;
         let cy = self.cat.1;
-        let x = self.window_size.0;
-        let y = self.window_size.1;
+        let wx = self.window_size.0;
+        let wy = self.window_size.1;
         let margin = 10;
 
-        let mut map = HashMap::new();
-        let scratch = &self.sprites.scratch;
-        map.insert(cx, &scratch.cardinal.w);
-        map.insert(cy, &scratch.cardinal.n);
-        map.insert(x - cx, &scratch.cardinal.e);
-        map.insert(y - cy, &scratch.cardinal.s);
-        let mut items: Vec<&i32> = map.keys().filter(|d| **d < margin).collect();
-        if items.is_empty() {
-            &scratch.cat
-        } else {
-            items.sort();
-            map.get(items[0]).unwrap()
-        }
+        let scratch = &SPRITES.scratch;
+        let distances = [
+            (cx, &scratch.cardinal.w),
+            (cy, &scratch.cardinal.n),
+            (wx - cx, &scratch.cardinal.e),
+            (wy - cy, &scratch.cardinal.s),
+        ];
+
+        distances
+            .iter()
+            .filter(|(d, _)| *d < margin)
+            .min_by_key(|(d, _)| *d)
+            .map(|(_, sprite)| *sprite)
+            .unwrap_or(&scratch.cat)
     }
 
     fn render(&mut self) {
@@ -127,7 +233,7 @@ impl ManzarState {
         // Idle Logic (cat close to mouse)
         if dist < speed {
             if self.idle.frame == 0 {
-                self.set_sprite(&self.sprites.idle.clone());
+                self.set_sprite(&SPRITES.idle);
                 self.idle.frame = 1;
             } else {
                 self.idle.frame += 1;
@@ -135,17 +241,17 @@ impl ManzarState {
                     let diff = self.idle.frame - self.idle.timeout;
 
                     // change below to adjust scratch frequency
-                    // make sure it's > 100
+                    // (we don't have access to rng)
                     let scratch_flag = self.frame % 101 == 0;
 
                     if diff > 40 {
-                        self.set_sprite(&self.sprites.sleeping.clone());
+                        self.set_sprite(&SPRITES.sleeping);
                     } else if scratch_flag {
-                        self.set_sprite(&self.get_cardinal_scratch_sprite().clone());
+                        self.set_sprite(self.get_cardinal_scratch_sprite());
                     } else if (20..40).contains(&diff) {
-                        self.set_sprite(&self.sprites.tired.clone());
+                        self.set_sprite(&SPRITES.tired);
                     } else {
-                        self.set_sprite(&self.animation.sprite.clone());
+                        self.set_sprite(self.animation.sprite);
                     }
                 }
             }
@@ -159,14 +265,12 @@ impl ManzarState {
         self.idle.frame = 0;
         if self.idle.buffer > 0 {
             self.idle.buffer -= 1;
-            self.set_sprite(&self.sprites.alert.clone());
+            self.set_sprite(&SPRITES.alert);
             return;
         }
 
         let cur_x = self.cat.0 as f32;
         let cur_y = self.cat.1 as f32;
-
-        // Make sure distance is not 0 here! WASM will give you an unreadable error!
 
         let dx = diff_x as f32 / dist;
         let dy = diff_y as f32 / dist;
@@ -174,23 +278,9 @@ impl ManzarState {
         let x = cur_x - dx * speed;
         let y = cur_y - dy * speed;
 
-        let mut direction = String::new();
-
-        if dy > 0.5 {
-            direction.push('N');
-        } else if dy < -0.5 {
-            direction.push('S');
-        }
-
-        if dx > 0.5 {
-            direction.push('W');
-        } else if dx < -0.5 {
-            direction.push('E');
-        }
-
-        let sprite = self.get_compass_sprites(&direction);
-        // let sprite = set[(self.frame % 2) as usize];
-        self.set_sprite(&sprite);
+        let direction = Direction::from_deltas(dx, dy);
+        let sprite = Self::get_compass_sprite(direction);
+        self.set_sprite(sprite);
         match &self.animation.sprite {
             Sprite::Static(_) => (),
             Sprite::Animated(anim) => {
@@ -203,8 +293,8 @@ impl ManzarState {
     }
 
     /// Change the sprite while respecting currently playing animations
-    fn set_sprite(&mut self, sprite: &Sprite) {
-        let cur = &self.animation.sprite.clone();
+    fn set_sprite(&mut self, sprite: &'static Sprite) {
+        let cur = self.animation.sprite;
         let target = match cur {
             Sprite::Animated(anim) => match &anim.duration {
                 AnimationDuration::Definite(_) => cur, // if we are currently playing a definite
@@ -216,13 +306,13 @@ impl ManzarState {
         self._set_sprite(target);
     }
 
-    fn _set_sprite(&mut self, sprite: &Sprite) {
+    fn _set_sprite(&mut self, sprite: &'static Sprite) {
         let pt = match sprite {
             Sprite::Animated(anim) => {
                 match anim.duration {
                     AnimationDuration::Definite(duration) => {
                         if duration <= self.animation.frame {
-                            self._set_sprite(&self.sprites.idle.clone());
+                            self._set_sprite(&SPRITES.idle);
                             self.animation.frame = 0;
                             self.idle.frame = 0;
                             self.frame = 0;
@@ -240,7 +330,7 @@ impl ManzarState {
                 pt
             }
         };
-        self.animation.sprite = sprite.clone();
+        self.animation.sprite = sprite;
         self.element
             .style()
             .set_property(
@@ -264,20 +354,18 @@ impl ManzarState {
         self.cat = Point(x, y);
     }
 
-    fn get_compass_sprites(&self, direction: &str) -> Sprite {
-        let c = self.sprites.cardinal.clone();
-        let o = self.sprites.ordinal.clone();
-
+    fn get_compass_sprite(direction: Direction) -> &'static Sprite {
+        let s = &SPRITES;
         match direction {
-            "N" => c.n,
-            "E" => c.e,
-            "W" => c.w,
-            "S" => c.s,
-            "NE" => o.ne,
-            "NW" => o.nw,
-            "SE" => o.se,
-            "SW" => o.sw,
-            _ => panic!("Invalid direction!"),
+            Direction::N => &s.cardinal.n,
+            Direction::S => &s.cardinal.s,
+            Direction::W => &s.cardinal.w,
+            Direction::E => &s.cardinal.e,
+            Direction::NW => &s.ordinal.nw,
+            Direction::NE => &s.ordinal.ne,
+            Direction::SW => &s.ordinal.sw,
+            Direction::SE => &s.ordinal.se,
+            Direction::None => &s.idle,
         }
     }
 }
@@ -287,8 +375,6 @@ struct Manzar {
     state: Rc<RefCell<ManzarState>>,
 }
 
-/// # Safety
-/// Careful! This could leak memory...
 #[wasm_bindgen]
 pub unsafe fn start(sprites_path: String) -> Result<(), JsValue> {
     let window = web_sys::window().expect("no window exists.");
@@ -319,109 +405,16 @@ pub unsafe fn start(sprites_path: String) -> Result<(), JsValue> {
     }
     body.append_child(&div)?;
 
-    let cardinal = CardinalSprites {
-        n: Sprite::Animated(Animation {
-            states: vec![Point(-1, -2), Point(-1, -3)],
-            duration: AnimationDuration::Infinite,
-            speed: 100,
-        }),
-        e: Sprite::Animated(Animation {
-            states: vec![Point(-3, 0), Point(-3, -1)],
-            duration: AnimationDuration::Infinite,
-            speed: 100,
-        }),
-        s: Sprite::Animated(Animation {
-            states: vec![Point(-6, -3), Point(-7, -2)],
-            duration: AnimationDuration::Infinite,
-            speed: 100,
-        }),
-        w: Sprite::Animated(Animation {
-            states: vec![Point(-4, -2), Point(-4, -3)],
-            duration: AnimationDuration::Infinite,
-            speed: 100,
-        }),
-    };
-
-    let ordinal = OrdinalSprites {
-        ne: Sprite::Animated(Animation {
-            states: vec![Point(0, -2), Point(0, -3)],
-            duration: AnimationDuration::Infinite,
-            speed: 100,
-        }),
-        se: Sprite::Animated(Animation {
-            states: vec![Point(-5, -1), Point(-5, -2)],
-            duration: AnimationDuration::Infinite,
-            speed: 100,
-        }),
-        sw: Sprite::Animated(Animation {
-            states: vec![Point(-5, -3), Point(-6, -1)],
-            duration: AnimationDuration::Infinite,
-            speed: 100,
-        }),
-        nw: Sprite::Animated(Animation {
-            states: vec![Point(-1, 0), Point(-1, -1)],
-            duration: AnimationDuration::Infinite,
-            speed: 100,
-        }),
-    };
-
-    let scratch = ScratchSprites {
-        cat: Sprite::Animated(Animation {
-            states: vec![Point(-5, 0), Point(-6, 0), Point(-7, 0)],
-            duration: AnimationDuration::Definite(20),
-            speed: 100,
-        }),
-        cardinal: CardinalSprites {
-            n: Sprite::Animated(Animation {
-                states: vec![Point(0, 0), Point(0, -1)],
-                duration: AnimationDuration::Definite(20),
-                speed: 100,
-            }),
-            e: Sprite::Animated(Animation {
-                states: vec![Point(-2, -2), Point(-2, -3)],
-                duration: AnimationDuration::Definite(20),
-                speed: 100,
-            }),
-            w: Sprite::Animated(Animation {
-                states: vec![Point(-4, 0), Point(-4, -1)],
-                duration: AnimationDuration::Definite(20),
-                speed: 100,
-            }),
-            s: Sprite::Animated(Animation {
-                states: vec![Point(-7, -1), Point(-6, -2)],
-                duration: AnimationDuration::Definite(20),
-                speed: 100,
-            }),
-        },
-    };
-
-    let sprites = ManzarSprites {
-        idle: Sprite::Static(Point(-3, -3)),
-        alert: Sprite::Static(Point(-7, -3)),
-        tired: Sprite::Static(Point(-3, -2)),
-        sleeping: Sprite::Animated(Animation {
-            states: vec![Point(-2, 0), Point(-2, -1)],
-            duration: AnimationDuration::Infinite,
-            speed: 25,
-        }),
-        cardinal,
-        ordinal,
-        scratch,
-    };
-
-    let idle = sprites.idle.clone();
-
     let de = document.document_element().unwrap();
 
     let manzar_state = ManzarState {
         element: div,
-        sprites,
         mouse: Point(32, 32),
         cat: Point(32, 32),
         speed: 10,
         frame: 0,
         animation: AnimationState {
-            sprite: idle,
+            sprite: &SPRITES.idle,
             frame: 0,
         },
         idle: IdleState {
