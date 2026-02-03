@@ -376,7 +376,7 @@ struct Manzar {
 }
 
 #[wasm_bindgen]
-pub unsafe fn start(sprites_path: String) -> Result<(), JsValue> {
+pub unsafe fn start(id: &str, sprites_path: &str, x: i32, y: i32) -> Result<(), JsValue> {
     let window = web_sys::window().expect("no window exists.");
     let document = window.document().expect("no document exists.");
     let body = document.body().expect("document does not have a body.");
@@ -385,17 +385,14 @@ pub unsafe fn start(sprites_path: String) -> Result<(), JsValue> {
         .unwrap()
         .dyn_into::<HtmlElement>()?;
 
-    div.set_id("Manzar");
+    div.set_id(id);
 
     let styles: [(&str, &str); 7] = [
         ("height", "32px"),
         ("width", "32px"),
-        ("top", "16px"),
-        ("left", "16px"),
-        (
-            "background-image",
-            &format!("url('{}')", sprites_path.as_str()),
-        ),
+        ("top", &format!("{}px", y - 16)),
+        ("left", &format!("{}px", x - 16)),
+        ("background-image", &format!("url('{}')", sprites_path)),
         ("position", "fixed"),
         ("image-rendering", "pixelated"),
     ];
@@ -409,8 +406,8 @@ pub unsafe fn start(sprites_path: String) -> Result<(), JsValue> {
 
     let manzar_state = ManzarState {
         element: div,
-        mouse: Point(32, 32),
-        cat: Point(32, 32),
+        mouse: Point(x, y),
+        cat: Point(x, y),
         speed: 10,
         frame: 0,
         animation: AnimationState {
