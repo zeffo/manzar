@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
-use web_sys::{HtmlElement, MouseEvent};
+use web_sys::{Element, HtmlElement, MouseEvent};
 
 // (x, y)
 struct Point(i32, i32);
@@ -193,6 +193,13 @@ struct ManzarState {
 
 impl ManzarState {
     fn on_mouse_down(&mut self, event: &MouseEvent) {
+        if let Some(target) = event.target() {
+            if let Some(element) = target.dyn_ref::<Element>() {
+                if matches!(element.closest("button"), Ok(Some(_))) {
+                    return
+                }  
+            }
+        }
         let x = event.client_x();
         let y = event.client_y();
         self.mouse = Point(x, y);
